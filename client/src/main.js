@@ -1,44 +1,57 @@
-import { createConnection } from "net";
+import { createServer, createConnection } from "net";
 import { createInterface } from "readline";
+import * as fs from 'fs';
+
+const portData = "4243"
 
 const rl = createInterface({
   input: process.stdin,
 });
 
-let currentCommand = '';
-let isAuthenticated = false;
+function dataServer(port){
+  const server = createServer((socket) => {
+    socket.on("data", (data) => {
+      const message = data.toString()
+      const [command, ...args] = message.trim().split(" ");
+      switch(command) {
+        case "RETR":
+          const [name, ...text] = args
+          fs.writeFile(name, text.join(" "), err => {
+            if (err) throw err
+          })
+          break
+        case "STOR":
+          socket.write(args[0] + " " + fs.readFileSync(args[0], 'utf-8'))
+          break
+        case "QUIT":
+          socket.destroy()
+          server.close()
+        default:
+          console.log("500 command not supported:", command, args);
+      }
+    })
+  })
 
-const client = createConnection({ port: 4242 }, () => {
-  console.log("client connected.");
+  server.listen(port, () => {
+    console.log(`server started at localhost:${port}`)
+  })
+}
+
+dataServer(portData)
+
+const client = createConnection({ port: process.argv[3] || 4242}, () => {
+  console.log("client connected.")
 });
 
 client.on("data", (data) => {
-  const message = data.toString();
-  console.log("Message received:", message);
-
-  const [status, ...args] = message.trim().split(" ");
-  
-  if (status == 230 && currentCommand === "USER") {
-    isAuthenticated = true;
-  }
-
-  /*if (status == 220) {
-    currentCommand = "USER";
-    client.write("USER anonymous");
-  };*/
-});
+  const message = data.toString()
+  console.log("Message received:", message)
+})
 
 rl.on("line", (input) => {
-  console.log('Input:', input);
-  const [command, ...args] = input.trim().split(" ");
-  /*switch(command) {
-    case "USER":
-      console.log("case user")
-      client.write(input)
-      break
-    default:
-      console.log("default")
-  
-  }*/
   client.write(input)
-});
+  if(input === "QUIT"){
+    rl.close()
+  }
+})
+
