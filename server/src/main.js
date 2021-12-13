@@ -1,3 +1,3 @@
 import { launch } from "./server";
 
-launch(4242);
+launch(process.argv[2] || 4242);
